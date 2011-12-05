@@ -39,9 +39,10 @@
 #define HOSTAPD_CONF_TEMPLATE_FILE "/system/etc/wifi/hostapd.conf"
 #define HOSTAPD_CONF_FILE "/data/misc/wifi/hostapd.conf"
 
-#define HOSTAPD_START_MAX_RETRIES 20
-#define HOSTAPD_START_DELAY_US  500000
-#define HOSTAPD_STOP_DELAY_US 500000
+#define HOSTAPD_IFUP_WAIT_RETRIES 20
+#define HOSTAPD_START_MAX_RETRIES 100
+#define HOSTAPD_START_DELAY_US  100000
+#define HOSTAPD_STOP_DELAY_US 100000
 
 #define STA_INTERFACE  "wlan0"
 #define AP_INTERFACE   "wlan1"
@@ -70,6 +71,7 @@ private:
     int getStaChanAndMode(int *chan, int *is_g_mode);
     int executeScanLinkCmd(const char *iface, int *iface_freq);
     static int linkDumpCbHandler(struct nl_msg *msg, void *arg);
+    int isIfUp(const char *ifname);
 
 public:
     SoftapController();
