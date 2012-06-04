@@ -38,6 +38,8 @@
 #include <linux/pkt_sched.h>
 
 #define LOG_TAG "BandwidthController"
+#define LOG_NDEBUG 0
+
 #include <cutils/log.h>
 #include <cutils/properties.h>
 
@@ -169,6 +171,11 @@ int BandwidthController::runIptablesCmd(const char *cmd, IptRejectOp rejectHandl
     char *next = buffer;
     char *tmp;
     int res;
+
+#ifdef NO_IPV6_QUOTA
+    // This function seems called from elsewhere
+    if (iptVer == IptIpV6) return 0;
+#endif
 
     std::string fullCmd = cmd;
 
@@ -941,8 +948,8 @@ int BandwidthController::parseForwardChainStats(TetherStats &stats, FILE *fp) {
         iface0[0] = iface1[0] = rest[0] = packets = bytes = 0;
         res = sscanf(buffPtr, "%lld %lld ACCEPT all -- %s %s 0.%s",
                 &packets, &bytes, iface0, iface1, rest);
-        LOGV("parse res=%d iface0=<%s> iface1=<%s> pkts=%lld bytes=%lld rest=<%s> orig line=<%s>", res,
-             iface0, iface1, packets, bytes, rest, buffPtr);
+        //LOGV("parse res=%d iface0=<%s> iface1=<%s> pkts=%lld bytes=%lld rest=<%s> orig line=<%s>", res,
+        //     iface0, iface1, packets, bytes, rest, buffPtr);
         if (res != 5) {
             continue;
         }

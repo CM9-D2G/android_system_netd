@@ -34,6 +34,10 @@ LOCAL_C_INCLUDES := $(KERNEL_HEADERS) \
 
 LOCAL_CFLAGS :=
 
+ifneq ($(BOARD_WITHOUT_IPV6_QUOTA),)
+  LOCAL_CFLAGS += -DNO_IPV6_QUOTA
+endif
+
 LOCAL_SHARED_LIBRARIES := libstlport libsysutils libcutils libnetutils \
                           libcrypto libhardware_legacy
 
