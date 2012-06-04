@@ -33,7 +33,9 @@
 #include <openssl/evp.h>
 #include <openssl/sha.h>
 
+#define LOG_NDEBUG 0
 #define LOG_TAG "SoftapController"
+
 #include <cutils/log.h>
 #include <netutils/ifc.h>
 #include <private/android_filesystem_config.h>
@@ -200,17 +202,25 @@ int SoftapController::startSoftap() {
 #endif
     if (!pid) {
 #ifdef HAVE_HOSTAPD
-#ifndef HOSTAPD_NO_ENTROPY
+# ifndef HOSTAPD_NO_ENTROPY
         ensure_entropy_file_exists();
-#endif
+# endif
+
+#ifdef HOSTAPD_SERVICE_NAME
+        // use the hostapd service defined in init.rc
+        if (execl("/system/bin/start", "/system/bin/start", HOSTAPD_SERVICE_NAME, NULL))
+#else
+        // or a custom binary run as root (like netd)
         if (execl("/system/bin/hostapd", "/system/bin/hostapd",
-#ifndef HOSTAPD_NO_ENTROPY
+# ifndef HOSTAPD_NO_ENTROPY
                   "-e", WIFI_ENTROPY_FILE,
-#endif
-                  HOSTAPD_CONF_FILE, (char *) NULL)) {
+# endif
+                  HOSTAPD_CONF_FILE, (char *) NULL))
+#endif /* HOSTAPD_SERVICE_NAME */
+        {
             LOGE("execl failed (%s)", strerror(errno));
         }
-#endif
+#endif /* HAVE_HOSTAPD */
         LOGE("Should never get here!");
         return -1;
     } else {
@@ -284,7 +294,7 @@ int SoftapController::addParam(int pos, const char *cmd, const char *arg)
 int SoftapController::setSoftap(int argc, char *argv[]) {
     char psk_str[2*SHA256_DIGEST_LENGTH+1];
     int ret = 0, i = 0, fd;
-    char *ssid, *iface;
+    char *ssid;
 
     if (mSock < 0) {
         LOGE("Softap set - failed to open socket");
@@ -296,7 +306,6 @@ int SoftapController::setSoftap(int argc, char *argv[]) {
     }
 
     strncpy(mIface, argv[3], sizeof(mIface));
-    iface = argv[2];
 
 #ifdef HAVE_HOSTAPD
     char *wbuf = NULL;
@@ -309,17 +318,19 @@ int SoftapController::setSoftap(int argc, char *argv[]) {
     }
 
     asprintf(&wbuf, "interface=%s\ndriver=" HOSTAPD_DRIVER_NAME "\nctrl_interface="
-            "/data/misc/wifi/hostapd\nssid=%s\nchannel=6\n", iface, ssid);
+            "/data/misc/wifi/hostapd\nssid=%s\nchannel=5\n", mIface, ssid);
 
     if (argc > 5) {
         if (!strcmp(argv[5], "wpa-psk")) {
             generatePsk(ssid, argv[6], psk_str);
             asprintf(&fbuf, "%swpa=1\nwpa_pairwise=TKIP CCMP\nwpa_psk=%s\n", wbuf, psk_str);
-        } else if (!strcmp(argv[5], "wpa2-psk")) {
+        } else if (!strncmp(argv[5], "wpa2", 4)) {
             generatePsk(ssid, argv[6], psk_str);
             asprintf(&fbuf, "%swpa=2\nrsn_pairwise=CCMP\nwpa_psk=%s\n", wbuf, psk_str);
         } else if (!strcmp(argv[5], "open")) {
             asprintf(&fbuf, "%s", wbuf);
+        } else {
+            LOGE("Invalid softap security type '%s'!\n", argv[5]);
         }
     } else {
         asprintf(&fbuf, "%s", wbuf);
@@ -397,7 +408,7 @@ int SoftapController::setSoftap(int argc, char *argv[]) {
     sprintf(&mBuf[i], "END");
 
     /* system("iwpriv eth0 WL_AP_CFG ASCII_CMD=AP_CFG,SSID=\"AndroidAP\",SEC=\"open\",KEY=12345,CHANNEL=1,PREAMBLE=0,MAX_SCB=8,END"); */
-    ret = setCommand(iface, "AP_SET_CFG");
+    ret = setCommand(mIface, "AP_SET_CFG");
     if (ret) {
         LOGE("Softap set - failed: %d", ret);
     }
