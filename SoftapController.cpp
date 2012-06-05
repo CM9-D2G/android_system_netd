@@ -37,6 +37,7 @@
 #define LOG_TAG "SoftapController"
 
 #include <cutils/log.h>
+#include <cutils/properties.h>
 #include <netutils/ifc.h>
 #include <private/android_filesystem_config.h>
 #include "wifi.h"
@@ -48,6 +49,8 @@
 #endif
 
 static const char HOSTAPD_CONF_FILE[]    = "/data/misc/wifi/hostapd.conf";
+
+extern "C" int system_nosh(const char *command);
 
 SoftapController::SoftapController() {
     mPid = 0;
@@ -185,6 +188,7 @@ int SoftapController::stopDriver(char *iface) {
 int SoftapController::startSoftap() {
     pid_t pid = 1;
     int ret = 0;
+    char value[PROPERTY_VALUE_MAX];
 
     if (mPid) {
         LOGE("Softap already started");
@@ -194,6 +198,36 @@ int SoftapController::startSoftap() {
         LOGE("Softap startap - failed to open socket");
         return -1;
     }
+#ifdef HOSTAPD_SERVICE_NAME
+
+#ifndef HOSTAPD_NO_ENTROPY
+    ensure_entropy_file_exists();
+#endif
+    ret = system_nosh("/system/bin/start " HOSTAPD_SERVICE_NAME);
+    pid = (ret == 0);
+
+    usleep(AP_BSS_START_DELAY);
+    property_get("init.svc." HOSTAPD_SERVICE_NAME, value, "stopped");
+    if (strcmp(value, "running") == 0) {
+        LOGD("hostapd service started");
+    } else {
+        ret = -1;
+    }
+
+    *mBuf = 0;
+    ret = setCommand(mIface, "AP_BSS_START");
+    if (ret) {
+        LOGE("Softap startap - failed: %d", ret);
+    }
+    else {
+        mPid = pid;
+        LOGD("Softap startap - Ok");
+        usleep(AP_BSS_START_DELAY);
+    }
+
+    return ret;
+#else
+
 #ifdef HAVE_HOSTAPD
     if ((pid = fork()) < 0) {
         LOGE("fork failed (%s)", strerror(errno));
@@ -202,22 +236,14 @@ int SoftapController::startSoftap() {
 #endif
     if (!pid) {
 #ifdef HAVE_HOSTAPD
-# ifndef HOSTAPD_NO_ENTROPY
+#ifndef HOSTAPD_NO_ENTROPY
         ensure_entropy_file_exists();
-# endif
-
-#ifdef HOSTAPD_SERVICE_NAME
-        // use the hostapd service defined in init.rc
-        if (execl("/system/bin/start", "/system/bin/start", HOSTAPD_SERVICE_NAME, NULL))
-#else
-        // or a custom binary run as root (like netd)
+#endif
         if (execl("/system/bin/hostapd", "/system/bin/hostapd",
-# ifndef HOSTAPD_NO_ENTROPY
+#ifndef HOSTAPD_NO_ENTROPY
                   "-e", WIFI_ENTROPY_FILE,
-# endif
-                  HOSTAPD_CONF_FILE, (char *) NULL))
-#endif /* HOSTAPD_SERVICE_NAME */
-        {
+#endif
+                  HOSTAPD_CONF_FILE, (char *) NULL)) {
             LOGE("execl failed (%s)", strerror(errno));
         }
 #endif /* HAVE_HOSTAPD */
@@ -236,7 +262,7 @@ int SoftapController::startSoftap() {
         }
     }
     return ret;
-
+#endif /* HOSTAPD_SERVICE_NAME */
 }
 
 int SoftapController::stopSoftap() {
@@ -246,6 +272,25 @@ int SoftapController::stopSoftap() {
         LOGE("Softap already stopped");
         return 0;
     }
+
+#ifdef HOSTAPD_SERVICE_NAME
+    LOGD("Stopping hostapd service");
+    // use the hostapd service defined in init.rc
+    if (system_nosh("/system/bin/stop " HOSTAPD_SERVICE_NAME))
+    {
+        LOGE("stop failed (%s)", strerror(errno));
+    }
+    if (mSock < 0) {
+        LOGE("Softap stopap - failed to open socket");
+        return -1;
+    }
+    *mBuf = 0;
+    ret = setCommand(mIface, "AP_BSS_STOP");
+    mPid = 0;
+    LOGD("Softap service stopped: %d", ret);
+    usleep(AP_BSS_STOP_DELAY);
+    return ret;
+#else
 
 #ifdef HAVE_HOSTAPD
     LOGD("Stopping Softap service");
@@ -262,6 +307,7 @@ int SoftapController::stopSoftap() {
     LOGD("Softap service stopped: %d", ret);
     usleep(AP_BSS_STOP_DELAY);
     return ret;
+#endif /* HOSTAPD_SERVICE_NAME */
 }
 
 bool SoftapController::isSoftapStarted() {
