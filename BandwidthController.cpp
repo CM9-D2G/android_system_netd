@@ -215,6 +215,10 @@ int BandwidthController::runIptablesCmd(const char *cmd, IptRejectOp rejectHandl
         res = logwrap(argc, argv, 0);
     }
     if (res) {
+        if (res == 0x100 && strncmp(cmd, "-D", 2) == 0) {
+            // ignore initial cleanup errors -D
+            return 0;
+        }
         LOGE("runIptablesCmd(): failed %s res=%d", fullCmd.c_str(), res);
     }
     return res;
