@@ -35,7 +35,6 @@
 
 #define LOG_NDEBUG 0
 #define LOG_TAG "SoftapController"
-
 #include <cutils/log.h>
 #include <cutils/properties.h>
 #include <netutils/ifc.h>
@@ -368,15 +367,12 @@ int SoftapController::setSoftap(int argc, char *argv[]) {
     }
 
     if (argc > 7) {
-        wbuf = argv[7];
+        channel = atoi(argv[7]);
     } else {
         char value[PROPERTY_VALUE_MAX];
         property_get("wifi.ap.channel", value, "0");
-        wbuf = value;
+        channel = atoi(value);
     }
-
-    channel = atoi(wbuf);
-    wbuf = NULL;
     if (channel == 0) {
         channel = AP_DEFAULT_CHANNEL;
         LOGV("No valid wifi channel specified, using default");
@@ -386,7 +382,7 @@ int SoftapController::setSoftap(int argc, char *argv[]) {
                     "ctrl_interface=" AP_SOCKET_PATH "\n"
                     "ssid=%s\nchannel=%d\n", mIface, ssid, channel);
 
-    LOGD("%s", wbuf);
+    LOGV("%s", wbuf);
 
     if (argc > 5) {
         if (!strcmp(argv[5], "wpa-psk")) {

@@ -27,9 +27,7 @@
 #include <netinet/in.h>
 #include <arpa/inet.h>
 
-#define LOG_NDEBUG 0
 #define LOG_TAG "TetherController"
-
 #include <cutils/log.h>
 #include <cutils/properties.h>
 

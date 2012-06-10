@@ -20,7 +20,6 @@
 #include <errno.h>
 
 #define LOG_TAG "Netd"
-#define LOG_NDEBUG 0
 
 #include <cutils/log.h>
 
