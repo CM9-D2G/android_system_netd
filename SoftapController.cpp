@@ -48,6 +48,9 @@
 #define HOSTAPD_DRIVER_NAME "nl80211"
 #endif
 
+#define AP_DEFAULT_CHANNEL 5
+#define AP_SOCKET_PATH "/data/misc/wifi/hostapd"
+
 static const char HOSTAPD_CONF_FILE[]    = "/data/misc/wifi/hostapd.conf";
 
 extern "C" int system_nosh(const char *command);
@@ -221,7 +224,7 @@ int SoftapController::startSoftap() {
     }
     else {
         mPid = pid;
-        LOGD("Softap startap - Ok");
+        LOGD("Softap started");
         usleep(AP_BSS_START_DELAY);
     }
 
@@ -356,6 +359,7 @@ int SoftapController::setSoftap(int argc, char *argv[]) {
 #ifdef HAVE_HOSTAPD
     char *wbuf = NULL;
     char *fbuf = NULL;
+    int channel = 0;
 
     if (argc > 4) {
         ssid = argv[4];
@@ -363,8 +367,26 @@ int SoftapController::setSoftap(int argc, char *argv[]) {
         ssid = (char *)"AndroidAP";
     }
 
-    asprintf(&wbuf, "interface=%s\ndriver=" HOSTAPD_DRIVER_NAME "\nctrl_interface="
-            "/data/misc/wifi/hostapd\nssid=%s\nchannel=5\n", mIface, ssid);
+    if (argc > 7) {
+        wbuf = argv[7];
+    } else {
+        char value[PROPERTY_VALUE_MAX];
+        property_get("wifi.ap.channel", value, "0");
+        wbuf = value;
+    }
+
+    channel = atoi(wbuf);
+    wbuf = NULL;
+    if (channel == 0) {
+        channel = AP_DEFAULT_CHANNEL;
+        LOGV("No valid wifi channel specified, using default");
+    }
+
+    asprintf(&wbuf, "interface=%s\ndriver=" HOSTAPD_DRIVER_NAME "\n"
+                    "ctrl_interface=" AP_SOCKET_PATH "\n"
+                    "ssid=%s\nchannel=%d\n", mIface, ssid, channel);
+
+    LOGD("%s", wbuf);
 
     if (argc > 5) {
         if (!strcmp(argv[5], "wpa-psk")) {
@@ -492,7 +514,7 @@ int SoftapController::fwReloadSoftap(int argc, char *argv[])
     char *fwpath;
 
     if (mSock < 0) {
-        LOGE("Softap fwrealod - failed to open socket");
+        LOGE("Softap fwreload - failed to open socket");
         return -1;
     }
     if (argc < 4) {
